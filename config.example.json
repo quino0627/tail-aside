@@ -1,0 +1,18 @@
+{
+  "host": "127.0.0.1",
+  "port": 4180,
+  "asideBin": "/Users/you/.local/bin/aside",
+  "account": "u0",
+  "sessionDirectory": "/Users/you/.aside/u/0/sessions",
+  "stateDirectory": "/Users/you/.local/state/tail-aside",
+  "tailscaleBin": "/Applications/Tailscale.app/Contents/MacOS/Tailscale",
+  "allowedLogins": [
+    "you@example.com"
+  ],
+  "allowAnyTailnetUser": false,
+  "defaults": {
+    "model": "",
+    "speed": "fast",
+    "effort": "minimal"
+  }
+}

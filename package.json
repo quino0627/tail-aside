@@ -1,0 +1,38 @@
+{
+  "name": "tail-aside",
+  "version": "0.1.0",
+  "description": "A mobile-first Tailnet console for the Aside browser agent CLI.",
+  "private": true,
+  "type": "module",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/quino0627/tail-aside.git"
+  },
+  "bugs": {
+    "url": "https://github.com/quino0627/tail-aside/issues"
+  },
+  "homepage": "https://github.com/quino0627/tail-aside#readme",
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "vite --host 127.0.0.1 --port 4180",
+    "build": "vite build",
+    "start": "node server.mjs",
+    "test": "node --test",
+    "check": "npm run test && npm run build",
+    "setup": "node scripts/setup.mjs",
+    "doctor": "node scripts/doctor.mjs"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.0",
+    "vite": "^8.2.0"
+  }
+}

@@ -1,0 +1,11 @@
+node_modules/
+dist/
+artifacts/
+coverage/
+.env
+.env.*
+*.log
+*.sqlite
+*.sqlite-*
+state.json
+.DS_Store
