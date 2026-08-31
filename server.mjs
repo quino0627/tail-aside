@@ -6,7 +6,9 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createGzip } from 'node:zlib';
 import { loadConfig } from './lib/config.mjs';
+import { sessionTitle } from './lib/session-display.mjs';
 import {
   SECURITY_HEADERS,
   authorizeRequest,
@@ -30,7 +32,7 @@ const MAX_OUTPUT_LENGTH = 240000;
 const MAX_THREADS = 120;
 const MAX_SESSION_SCAN_BYTES = 96 * 1024;
 const CACHE_DATABASE_FILE = path.join(STATE_DIRECTORY, 'aside-sessions.sqlite');
-const ASIDE_CACHE_SCHEMA_VERSION = 2;
+const ASIDE_CACHE_SCHEMA_VERSION = 3;
 const CATALOG_CACHE_TTL_MS = 45000;
 const MAX_IMPORTED_TURNS = 40;
 const MAX_TRANSCRIPT_TAIL_BYTES = 2 * 1024 * 1024;
@@ -62,6 +64,7 @@ const MIME_TYPES = {
   '.png': 'image/png',
   '.ico': 'image/x-icon',
 };
+const COMPRESSIBLE_TYPES = new Set(['.css', '.html', '.js', '.json', '.svg']);
 
 function now() {
   return new Date().toISOString();
@@ -82,7 +85,7 @@ function trimText(value = '', limit = 96) {
 
 function titleFrom(body) {
   const source = body.title || body.prompt || (body.mode === 'send' ? 'External send' : 'Agent chat');
-  return trimText(String(source).split(/\r?\n/)[0], 56) || 'New session';
+  return sessionTitle(String(source).split(/\r?\n/)[0], 56) || 'New session';
 }
 
 function sortedThreads() {
@@ -470,7 +473,7 @@ function scanAsideTranscript(buffer) {
       const text = redactSensitive(operatorPromptText(messageText(message)));
       if (!text) continue;
       turnCount += 1;
-      if (!title) title = trimText(text, 56);
+      if (!title) title = sessionTitle(text, 56);
     } else if (message.role === 'assistant') {
       const text = redactSensitive(assistantText(message));
       if (text) preview = trimText(text, 240);
@@ -1010,15 +1013,32 @@ async function serveStatic(req, res, pathname) {
   try {
     const stat = await fs.stat(filePath);
     if (!stat.isFile()) throw new Error('not a file');
-    const type = MIME_TYPES[path.extname(filePath)] || 'application/octet-stream';
+    const extension = path.extname(filePath);
+    const type = MIME_TYPES[extension] || 'application/octet-stream';
     const isHashedAsset = pathname.startsWith('/assets/');
-    res.writeHead(200, {
+    const useGzip = req.method !== 'HEAD'
+      && stat.size > 1_024
+      && COMPRESSIBLE_TYPES.has(extension)
+      && /(?:^|,)\s*gzip(?:\s*;|\s*,|$)/i.test(req.headers['accept-encoding'] || '');
+    const headers = {
       'Content-Type': type,
-      'Content-Length': stat.size,
       'Cache-Control': isHashedAsset ? 'public, max-age=31536000, immutable' : 'no-cache',
       ...SECURITY_HEADERS,
-    });
-    createReadStream(filePath).pipe(res);
+    };
+    if (stat.size > 1_024 && COMPRESSIBLE_TYPES.has(extension)) headers.Vary = 'Accept-Encoding';
+    if (useGzip) {
+      headers['Content-Encoding'] = 'gzip';
+    } else {
+      headers['Content-Length'] = stat.size;
+    }
+    res.writeHead(200, headers);
+    if (req.method === 'HEAD') {
+      res.end();
+    } else if (useGzip) {
+      createReadStream(filePath).pipe(createGzip({ level: 6 })).pipe(res);
+    } else {
+      createReadStream(filePath).pipe(res);
+    }
   } catch {
     sendText(res, 404, 'Not found\n');
   }
@@ -1058,7 +1078,7 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     if (req.method === 'GET' && pathname === '/api/threads') {
-      await syncAsideSessionCatalog();
+      await syncAsideSessionCatalog(url.searchParams.get('refresh') === '1');
       sendJson(res, 200, { threads: sortedThreads().map(publicThread) });
       return;
     }
@@ -1110,7 +1130,7 @@ const server = http.createServer(async (req, res) => {
       sendJson(res, 200, { thread: publicThread(thread), run: publicRun(run, true) });
       return;
     }
-    if (req.method === 'GET') {
+    if (req.method === 'GET' || req.method === 'HEAD') {
       await serveStatic(req, res, pathname);
       return;
     }

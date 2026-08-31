@@ -1,22 +1,51 @@
-import { useEffect } from 'react';
+import { useEffect, useId, useRef } from 'react';
 import { Icon } from './Ui';
 
 function Sheet({ title, subtitle, children, onClose }) {
+  const sheetRef = useRef(null);
+  const closeRef = useRef(onClose);
+  const titleId = useId();
+  closeRef.current = onClose;
+
   useEffect(() => {
+    const previousFocus = document.activeElement;
+    const sheet = sheetRef.current;
+    const focusableSelector = 'button:not(:disabled), input:not(:disabled), textarea:not(:disabled), [href], [tabindex]:not([tabindex="-1"])';
+    const initialFocus = sheet?.querySelector(focusableSelector) || sheet;
+    requestAnimationFrame(() => initialFocus?.focus({ preventScroll: true }));
+
     function onKeyDown(event) {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') {
+        closeRef.current();
+        return;
+      }
+      if (event.key !== 'Tab' || !sheet) return;
+      const focusable = [...sheet.querySelectorAll(focusableSelector)];
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     }
     window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [onClose]);
+    return () => {
+      window.removeEventListener('keydown', onKeyDown);
+      previousFocus?.focus?.({ preventScroll: true });
+    };
+  }, []);
 
   return (
     <div className="sheet-layer" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <section className="sheet" role="dialog" aria-modal="true" aria-label={title}>
+      <section className="sheet" ref={sheetRef} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
         <div className="sheet-handle" />
         <header className="sheet-header">
           <span>
-            <h2>{title}</h2>
+            <h2 id={titleId}>{title}</h2>
             {subtitle ? <p>{subtitle}</p> : null}
           </span>
           <button type="button" className="icon-button" onClick={onClose} aria-label="Close">
@@ -84,6 +113,12 @@ export function SettingsSheet({
   onRefresh,
   onClose,
 }) {
+  function resetDefaults() {
+    setModel(health?.defaults?.model || '');
+    setEffort(health?.defaults?.effort || 'minimal');
+    setSpeed(health?.defaults?.speed || 'fast');
+  }
+
   return (
     <Sheet title="Agent settings" subtitle="These values are passed directly to Aside CLI for each run." onClose={onClose}>
       <section className="settings-section">
@@ -102,6 +137,7 @@ export function SettingsSheet({
           {['default', 'fast'].map((value) => <button type="button" key={value} className={speed === value ? 'is-selected' : ''} onClick={() => setSpeed(value)}>{value}</button>)}
         </div>
       </section>
+      <button type="button" className="secondary-action" onClick={resetDefaults}>Reset to Aside defaults</button>
       <section className="status-panel">
         <div className="status-title">
           <span className={`connection-dot ${health?.ok ? 'is-online' : ''}`} />

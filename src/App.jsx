@@ -1,10 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cancelRun, createRun, getBrowserTabs, getHealth, getThread, getThreads } from './lib/api';
 import { Brand, Icon } from './components/Ui';
 import { SessionList } from './components/Sessions';
-import { ThreadView } from './components/Thread';
 import { Composer } from './components/Composer';
 import { PermissionSheet, SettingsSheet } from './components/Sheets';
+
+const ThreadView = lazy(() => import('./components/Thread').then((module) => ({ default: module.ThreadView })));
+const NEW_DRAFT_KEY = '__new__';
 
 function storedValue(key, fallback) {
   try {
@@ -30,7 +32,7 @@ export default function App() {
   const [activeThreadId, setActiveThreadId] = useState(() => sessionStorage.getItem('tail-aside.active-thread'));
   const [activeThread, setActiveThread] = useState(null);
   const [threadRuns, setThreadRuns] = useState([]);
-  const [draft, setDraft] = useState('');
+  const [drafts, setDrafts] = useState({});
   const [mode, setMode] = useState('readonly');
   const [model, setModel] = useState(() => storedValue('tail-aside.model', ''));
   const [effort, setEffort] = useState(() => storedValue('tail-aside.effort', 'minimal'));
@@ -40,13 +42,27 @@ export default function App() {
   const [confirmation, setConfirmation] = useState('');
   const [externalAction, setExternalAction] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
   const [sheet, setSheet] = useState(null);
+  const [showJumpToLatest, setShowJumpToLatest] = useState(false);
   const metaSignatureRef = useRef('');
   const threadSignatureRef = useRef('');
   const preferencesInitializedRef = useRef(false);
   const threadScrollerRef = useRef(null);
   const previousThreadRef = useRef(null);
+  const draftKey = activeThreadId || NEW_DRAFT_KEY;
+  const draft = drafts[draftKey] || '';
+
+  const updateDraft = useCallback((value) => {
+    setDrafts((current) => {
+      if (current[draftKey] === value) return current;
+      const next = { ...current };
+      if (value) next[draftKey] = value;
+      else delete next[draftKey];
+      return next;
+    });
+  }, [draftKey]);
 
   const activeRun = useMemo(
     () => threadRuns.find((run) => run.status === 'running') || null,
@@ -68,12 +84,13 @@ export default function App() {
     });
   }, []);
 
-  const refreshMeta = useCallback(async () => {
+  const refreshMeta = useCallback(async ({ force = false } = {}) => {
+    if (force) setRefreshing(true);
     try {
       const [healthValue, tabsValue, threadValue] = await Promise.all([
         getHealth(),
         getBrowserTabs(),
-        getThreads(),
+        getThreads(force),
       ]);
       const nextTabs = tabsValue.tabs || [];
       const nextThreads = threadValue.threads || [];
@@ -93,6 +110,8 @@ export default function App() {
       setError((current) => current.startsWith('Could not connect') ? '' : current);
     } catch (requestError) {
       setError(`Could not connect to tail-aside: ${requestError.message}`);
+    } finally {
+      if (force) setRefreshing(false);
     }
   }, []);
 
@@ -101,7 +120,14 @@ export default function App() {
     const timer = window.setInterval(() => {
       if (!selectionIsActive()) refreshMeta();
     }, 20_000);
-    return () => window.clearInterval(timer);
+    function onVisibilityChange() {
+      if (!document.hidden && !selectionIsActive()) refreshMeta();
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [refreshMeta]);
 
   useEffect(() => {
@@ -124,9 +150,11 @@ export default function App() {
     }
     sessionStorage.setItem('tail-aside.active-thread', activeThreadId);
     let cancelled = false;
+    let requestInFlight = false;
 
     async function refreshThread({ force = false } = {}) {
-      if (!force && selectionIsActive()) return;
+      if (requestInFlight || (!force && (selectionIsActive() || document.hidden))) return;
+      requestInFlight = true;
       try {
         const value = await getThread(activeThreadId);
         if (cancelled || !value.thread) return;
@@ -137,17 +165,30 @@ export default function App() {
         setThreadRuns(value.runs || []);
         mergeThread(value.thread);
       } catch (requestError) {
-        if (!cancelled) setError(requestError.message);
+        if (!cancelled && requestError.status === 404) {
+          setActiveThreadId(null);
+          setError('That Aside session is no longer available. The session list was refreshed.');
+          refreshMeta({ force: true });
+        } else if (!cancelled) {
+          setError(requestError.message);
+        }
+      } finally {
+        requestInFlight = false;
       }
     }
 
     refreshThread({ force: true });
     const timer = window.setInterval(refreshThread, 1_200);
+    function onVisibilityChange() {
+      if (!document.hidden) refreshThread({ force: true });
+    }
+    document.addEventListener('visibilitychange', onVisibilityChange);
     return () => {
       cancelled = true;
       window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [activeThreadId, mergeThread]);
+  }, [activeThreadId, mergeThread, refreshMeta]);
 
   useEffect(() => {
     const scroller = threadScrollerRef.current;
@@ -156,6 +197,7 @@ export default function App() {
     const nearBottom = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 140;
     if (switchedThread || nearBottom) {
       requestAnimationFrame(() => scroller.scrollTo({ top: scroller.scrollHeight, behavior: switchedThread ? 'auto' : 'smooth' }));
+      setShowJumpToLatest(false);
     }
     previousThreadRef.current = activeThreadId;
   }, [activeThreadId, threadRuns]);
@@ -165,13 +207,18 @@ export default function App() {
     setActiveThreadId(id);
     setSheet(null);
     setError('');
+    setShowJumpToLatest(false);
   }
 
   function newConversation() {
     setActiveThreadId(null);
     setActiveThread(null);
     setThreadRuns([]);
-    setDraft('');
+    setDrafts((current) => {
+      const next = { ...current };
+      delete next[NEW_DRAFT_KEY];
+      return next;
+    });
     setMode('readonly');
     setTarget('');
     setExternalMessage('');
@@ -179,6 +226,7 @@ export default function App() {
     setExternalAction(false);
     setSheet(null);
     setError('');
+    setShowJumpToLatest(false);
   }
 
   async function startRun() {
@@ -213,7 +261,7 @@ export default function App() {
       setActiveThreadId(value.thread.id);
       threadSignatureRef.current = '';
       setThreadRuns((current) => activeThreadId === value.thread.id ? [...current, value.run] : [value.run]);
-      setDraft('');
+      updateDraft('');
       setSheet(null);
       if (mode === 'send') {
         setConfirmation('');
@@ -240,10 +288,23 @@ export default function App() {
     }
   }
 
+  function updateScrollPosition() {
+    const scroller = threadScrollerRef.current;
+    if (!scroller) return;
+    setShowJumpToLatest(scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight > 180);
+  }
+
+  function scrollToLatest() {
+    const scroller = threadScrollerRef.current;
+    if (!scroller) return;
+    scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' });
+    setShowJumpToLatest(false);
+  }
+
   const composer = (
     <Composer
       draft={draft}
-      setDraft={setDraft}
+      setDraft={updateDraft}
       onSubmit={startRun}
       onNew={newConversation}
       onOpenPermission={() => setSheet('permission')}
@@ -255,7 +316,7 @@ export default function App() {
       onStop={stopActiveRun}
       loading={loading}
       continuationBlocked={continuationBlocked}
-      error={error}
+      error={error.startsWith('Could not connect') ? '' : error}
       home={!activeThreadId}
     />
   );
@@ -288,12 +349,19 @@ export default function App() {
           setEffort={setEffort}
           speed={speed}
           setSpeed={setSpeed}
-          onRefresh={refreshMeta}
+          onRefresh={() => refreshMeta({ force: true })}
           onClose={() => setSheet(null)}
         />
       ) : null}
     </>
   );
+
+  const connectionNotice = error.startsWith('Could not connect') ? (
+    <div className="connection-notice" role="alert">
+      <span><strong>Connection lost.</strong> Your Mac or Tailnet may be temporarily unavailable.</span>
+      <button type="button" onClick={() => refreshMeta({ force: true })} disabled={refreshing}>{refreshing ? 'Retrying…' : 'Retry'}</button>
+    </div>
+  ) : null;
 
   if (!activeThreadId) {
     return (
@@ -307,12 +375,20 @@ export default function App() {
           </button>
         </header>
         <main className="home-content">
+          {connectionNotice}
           <section className="home-hero">
-            <p className="eyebrow">Aside on your tailnet</p>
+            <p className="eyebrow"><Icon name="lock" size={13} /> Private on your Tailnet</p>
             <h1>What should Aside do?</h1>
             <p>Run the same browser agent from your phone, then continue the session later.</p>
           </section>
-          <SessionList threads={threads} loading={!health} onOpen={openThread} onNew={newConversation} />
+          <SessionList
+            threads={threads}
+            loading={!health}
+            onOpen={openThread}
+            onNew={newConversation}
+            onRefresh={() => refreshMeta({ force: true })}
+            refreshing={refreshing}
+          />
         </main>
         <footer className="composer-dock">{composer}</footer>
         {sheets}
@@ -322,22 +398,58 @@ export default function App() {
 
   return (
     <div className="app-shell thread-shell">
-      <header className="thread-header">
-        <button type="button" className="icon-button" onClick={() => setActiveThreadId(null)} aria-label="Back to sessions">
-          <Icon name="arrowLeft" size={20} />
+      <aside className="desktop-sidebar" aria-label="Aside sessions">
+        <header className="sidebar-header">
+          <Brand compact />
+          <button type="button" className="icon-button" onClick={newConversation} aria-label="New session"><Icon name="plus" size={18} /></button>
+        </header>
+        <div className="sidebar-scroll">
+          <SessionList
+            compact
+            threads={threads}
+            loading={!health}
+            onOpen={openThread}
+            onNew={newConversation}
+            onRefresh={() => refreshMeta({ force: true })}
+            refreshing={refreshing}
+            activeThreadId={activeThreadId}
+          />
+        </div>
+        <button type="button" className="sidebar-status" onClick={() => setSheet('settings')}>
+          <span className={`connection-dot ${health?.ok ? 'is-online' : ''}`} />
+          <span><strong>{health?.ok ? 'Aside connected' : 'Check connection'}</strong><small>Private via Tailscale</small></span>
+          <Icon name="settings" size={17} />
         </button>
-        <span className="thread-heading">
-          <span className="thread-title">{activeThread?.title || 'Aside session'}</span>
-          <span className="thread-subtitle"><Icon name="lock" size={11} /> Private via Tailscale{activeThread?.canContinue ? ' · continuing' : ''}</span>
-        </span>
-        <button type="button" className="icon-button" onClick={() => setSheet('settings')} aria-label="Agent settings">
-          <Icon name="settings" size={19} />
-        </button>
-      </header>
-      <main className="thread-scroll" ref={threadScrollerRef} aria-live="polite">
-        <ThreadView runs={threadRuns} />
-      </main>
-      <footer className="composer-dock thread-dock">{composer}</footer>
+      </aside>
+      <section className="thread-pane">
+        <header className="thread-header">
+          <button type="button" className="icon-button back-button" onClick={() => setActiveThreadId(null)} aria-label="Back to sessions">
+            <Icon name="arrowLeft" size={20} />
+          </button>
+          <span className="thread-heading">
+            <span className="thread-title">{activeThread?.title || 'Aside session'}</span>
+            <span className="thread-subtitle"><Icon name="lock" size={11} /> Private via Tailscale{activeThread?.canContinue ? ' · continuing' : ''}</span>
+          </span>
+          <button type="button" className="icon-button thread-new-button" onClick={newConversation} aria-label="New session">
+            <Icon name="plus" size={18} />
+          </button>
+          <button type="button" className="icon-button" onClick={() => setSheet('settings')} aria-label="Agent settings">
+            <Icon name="settings" size={19} />
+          </button>
+        </header>
+        {connectionNotice}
+        <main className="thread-scroll" ref={threadScrollerRef} onScroll={updateScrollPosition} aria-live="polite">
+          <Suspense fallback={<div className="thread-empty">Loading conversation renderer…</div>}>
+            <ThreadView runs={threadRuns} />
+          </Suspense>
+        </main>
+        {showJumpToLatest ? (
+          <button type="button" className="jump-to-latest" onClick={scrollToLatest} aria-label="Jump to latest message">
+            <Icon name="arrowDown" size={17} /> Latest
+          </button>
+        ) : null}
+        <footer className="composer-dock thread-dock">{composer}</footer>
+      </section>
       {sheets}
     </div>
   );

@@ -1,26 +1,10 @@
-import { memo } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { splitRunOutput } from '../lib/output';
 import { Icon, Spinner, workedFor } from './Ui';
 
-function isActivityLine(line) {
-  return /^(thinking:|plan:|tool|repl\(|openTab\(|listBrowserTabs\(|readFile\(|writeFile\(|click\(|fill\(|navigate\(|browser|\[?step|\$ |> )/i.test(line);
-}
-
-function splitOutput(output = '') {
-  const lines = output
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/created\s+new\s+session/i.test(line));
-  return {
-    activity: lines.filter(isActivityLine).slice(-32),
-    prose: lines.filter((line) => !isActivityLine(line)).slice(-160),
-  };
-}
-
-function WorkFold({ run }) {
-  const { activity } = splitOutput(run.output);
+function WorkFold({ run, activity }) {
   const running = run.status === 'running';
   if (!running && !activity.length) return null;
   const latest = activity.at(-1)?.replace(/^(thinking:|plan:|tool)\s*/i, '') || 'Working with Aside';
@@ -44,24 +28,53 @@ function WorkFold({ run }) {
   );
 }
 
-function ConversationTurn({ run }) {
-  const { prose } = splitOutput(run.output);
+function CopyResponse({ value }) {
+  const [state, setState] = useState('idle');
+
+  useEffect(() => {
+    if (state === 'idle') return undefined;
+    const timer = window.setTimeout(() => setState('idle'), 1_800);
+    return () => window.clearTimeout(timer);
+  }, [state]);
+
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(value);
+      setState('copied');
+    } catch {
+      setState('failed');
+    }
+  }
+
+  return (
+    <button type="button" className="response-action" onClick={copy} aria-label="Copy Aside response">
+      <Icon name={state === 'copied' ? 'check' : 'copy'} size={14} />
+      <span aria-live="polite">{state === 'copied' ? 'Copied' : state === 'failed' ? 'Copy failed' : 'Copy'}</span>
+    </button>
+  );
+}
+
+const ConversationTurn = memo(function ConversationTurn({ run }) {
+  const { activity, prose } = useMemo(() => splitRunOutput(run.output), [run.output]);
   const failed = ['failed', 'cancelled', 'interrupted'].includes(run.status);
   return (
     <article className="conversation-turn">
       <div className="user-message selectable">{run.prompt}</div>
-      <WorkFold run={run} />
-      {prose.length ? (
-        <div className="assistant-message markdown-body selectable">
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            components={{
-              a: ({ node: _node, children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
-              img: ({ node: _node, alt }) => <span className="markdown-image-placeholder">[Image: {alt || 'attachment'}]</span>,
-            }}
-          >
-            {prose.join('\n')}
-          </ReactMarkdown>
+      <WorkFold run={run} activity={activity} />
+      {prose ? (
+        <div className="assistant-response">
+          <div className="assistant-message markdown-body selectable">
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              components={{
+                a: ({ node: _node, children, ...props }) => <a {...props} target="_blank" rel="noreferrer">{children}</a>,
+                img: ({ node: _node, alt }) => <span className="markdown-image-placeholder">[Image: {alt || 'attachment'}]</span>,
+              }}
+            >
+              {prose}
+            </ReactMarkdown>
+          </div>
+          <div className="response-actions"><CopyResponse value={prose} /></div>
         </div>
       ) : null}
       {failed ? (
@@ -71,9 +84,21 @@ function ConversationTurn({ run }) {
       ) : null}
     </article>
   );
-}
+}, (previous, next) => (
+  previous.run.id === next.run.id
+  && previous.run.status === next.run.status
+  && previous.run.output === next.run.output
+  && previous.run.prompt === next.run.prompt
+));
 
 export const ThreadView = memo(function ThreadView({ runs }) {
-  if (!runs.length) return <p className="thread-empty">Loading this Aside session…</p>;
+  if (!runs.length) {
+    return (
+      <div className="thread-empty" role="status">
+        <Spinner />
+        <span>Loading this Aside session…</span>
+      </div>
+    );
+  }
   return <div className="thread-view">{runs.map((run) => <ConversationTurn key={run.id} run={run} />)}</div>;
 });

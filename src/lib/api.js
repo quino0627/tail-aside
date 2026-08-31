@@ -15,7 +15,11 @@ export async function apiRequest(path, options = {}) {
   } catch {
     value = {};
   }
-  if (!response.ok) throw new Error(value.error || `tail-aside request failed (${response.status}).`);
+  if (!response.ok) {
+    const error = new Error(value.error || `tail-aside request failed (${response.status}).`);
+    error.status = response.status;
+    throw error;
+  }
   return value;
 }
 
@@ -27,8 +31,8 @@ export function getBrowserTabs() {
   return apiRequest('/api/browser-tabs');
 }
 
-export function getThreads() {
-  return apiRequest('/api/threads');
+export function getThreads(force = false) {
+  return apiRequest(force ? '/api/threads?refresh=1' : '/api/threads');
 }
 
 export function getThread(threadId) {

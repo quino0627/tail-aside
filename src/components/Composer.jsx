@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { Icon } from './Ui';
+import { Icon, Spinner } from './Ui';
 
 export function Composer({
   draft,
@@ -20,6 +20,8 @@ export function Composer({
 }) {
   const textareaRef = useRef(null);
   const canSend = Boolean(draft.trim()) && !loading && !activeRun && !continuationBlocked;
+  const modelName = model ? model.split('/').at(-1) : 'default';
+  const settingsLabel = `${effort} · ${modelName}`;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -53,11 +55,13 @@ export function Composer({
           ? 'This session can no longer be continued.'
           : home ? 'Ask Aside to do something…' : 'Continue this session…'}
         aria-label="Message Aside"
+        aria-describedby={error ? 'composer-error' : undefined}
         rows={1}
         disabled={continuationBlocked}
         enterKeyHint="enter"
+        maxLength={8000}
       />
-      {error ? <p className="composer-error" role="alert">{error}</p> : null}
+      {error ? <p className="composer-error" id="composer-error" role="alert">{error}</p> : null}
       <div className="composer-toolbar">
         <button type="button" className="tool-button icon-only" onClick={onNew} aria-label="New session">
           <Icon name="plus" size={18} />
@@ -69,20 +73,18 @@ export function Composer({
         >
           <span className="mode-dot" /> {mode === 'send' ? 'Send' : 'Agent'}
         </button>
-        <button type="button" className="tool-button" onClick={onOpenSettings}>
-          {effort}
-        </button>
-        <button type="button" className="tool-button model-tool" onClick={onOpenSettings}>
-          {model || 'Default model'} <Icon name="chevronDown" size={12} />
+        <button type="button" className="tool-button settings-tool" onClick={onOpenSettings} aria-label={`Agent settings: ${settingsLabel}`}>
+          <span>{effort}</span><span className="settings-detail"> · {modelName}</span><Icon name="chevronDown" size={12} />
         </button>
         <span className="toolbar-spacer" />
+        {draft.length > 7200 ? <span className="composer-count" aria-label={`${8000 - draft.length} characters remaining`}>{8000 - draft.length}</span> : null}
         {activeRun ? (
           <button type="button" className="send-button is-stop" onClick={onStop} aria-label="Stop run">
             <Icon name="stop" size={15} />
           </button>
         ) : (
           <button type="submit" className="send-button" disabled={!canSend} aria-label="Send to Aside">
-            <Icon name="arrowUp" size={18} strokeWidth={2} />
+            {loading ? <Spinner label="Starting Aside" /> : <Icon name="arrowUp" size={18} strokeWidth={2} />}
           </button>
         )}
       </div>
