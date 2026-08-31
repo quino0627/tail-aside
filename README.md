@@ -1,43 +1,79 @@
-# tail-aside
+<p align="center">
+  <img src="public/icon.svg" width="88" height="88" alt="tail-aside icon">
+</p>
 
-Use the Aside browser agent from your phone over your private Tailscale network.
-
-`tail-aside` is a standalone, mobile-first web app that runs beside the Aside CLI. It imports your local Aside session list, shows live agent work, and continues a selected conversation with `aside exec --session` instead of creating a new chat for every message.
+<h1 align="center">tail-aside</h1>
 
 <p align="center">
-  <img src="docs/screenshots/tail-aside-mobile-thread.png" width="320" alt="tail-aside continuing the same Aside session on a mobile viewport">
+  <strong>Leave Aside on your Mac. Pick up the same agent session on your phone.</strong>
+</p>
+
+<p align="center">
+  A private, mobile-first control surface for the Aside browser agent,<br>
+  powered by the Aside CLI and Tailscale Serve.
+</p>
+
+<p align="center">
+  <a href="https://github.com/quino0627/tail-aside/actions/workflows/ci.yml"><img alt="CI" src="https://img.shields.io/github/actions/workflow/status/quino0627/tail-aside/ci.yml?branch=main&amp;style=flat-square&amp;label=CI"></a>
+  <a href="https://github.com/quino0627/tail-aside/releases"><img alt="Release" src="https://img.shields.io/github/v/release/quino0627/tail-aside?style=flat-square"></a>
+  <a href="LICENSE"><img alt="MIT License" src="https://img.shields.io/github/license/quino0627/tail-aside?style=flat-square"></a>
+  <img alt="Node.js 22.12 or newer" src="https://img.shields.io/badge/Node.js-%E2%89%A522.12-5FA04E?style=flat-square&amp;logo=nodedotjs&amp;logoColor=white">
+</p>
+
+<p align="center">
+  <a href="#quick-start">Quick start</a> ·
+  <a href="#how-it-works">How it works</a> ·
+  <a href="#security-by-default">Security</a> ·
+  <a href="https://github.com/quino0627/tail-aside/issues">Issues</a>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/tail-aside-mobile-thread.png" width="360" alt="tail-aside continuing an Aside session on a mobile viewport">
+</p>
+
+<p align="center">
+  <sub>One conversation, continued from a mobile viewport — live work, model controls, and all.</sub>
 </p>
 
 > [!IMPORTANT]
-> This is an unofficial community project. It is not affiliated with or endorsed by Aside or Tailscale. You must install and sign in to the Aside CLI separately.
+> `tail-aside` is an unofficial community project. It is not affiliated with or endorsed by Aside or Tailscale. Install and sign in to the Aside CLI separately.
 
-## What it does
+## Your agent, without the desk
 
-- Lists and searches existing local Aside sessions, with an SQLite metadata cache.
-- Continues the same Aside session across follow-up messages.
-- Shows agent output and a collapsible live-work timeline.
-- Lets you select model, speed, and reasoning effort per run.
-- Works as an installable mobile web app with iPhone-safe input sizing and text selection.
-- Keeps the server on localhost and exposes it only through Tailscale Serve.
-- Restricts API access to the Tailscale login detected during setup by default.
-- Requires an exact target, exact message, `SEND`, and a checkbox for any external-send request.
+`tail-aside` does not replace Aside or run another agent in the cloud. It keeps the agent runtime on your Mac and gives your phone a private remote over your Tailnet.
 
-```mermaid
-flowchart LR
-  Phone[Phone browser] -->|Private HTTPS| Serve[Tailscale Serve]
-  Serve -->|localhost proxy + identity headers| TailAside[tail-aside]
-  TailAside -->|exec / exec --session| Aside[Aside CLI]
-  Aside --> Browser[Aside browser agent]
-```
+<table>
+  <tr>
+    <td width="33%" valign="top">
+      <strong>📱 Built for thumbs</strong><br><br>
+      An installable mobile web app with responsive navigation, iPhone-safe inputs, and selectable output.
+    </td>
+    <td width="33%" valign="top">
+      <strong>↩️ Continue, don't restart</strong><br><br>
+      Pick an existing local Aside conversation and keep talking through <code>aside exec --session</code>.
+    </td>
+    <td width="33%" valign="top">
+      <strong>🔒 Private by default</strong><br><br>
+      The server stays on localhost. Tailscale Serve provides private HTTPS and verified Tailnet identity.
+    </td>
+  </tr>
+</table>
 
-## Requirements
+## What you get
 
-- macOS for the one-command LaunchAgent setup. Manual server startup also works anywhere the Aside CLI runs.
-- Node.js 22.12 or newer. The session cache uses the built-in `node:sqlite` module.
-- A working, signed-in Aside CLI.
-- Tailscale connected on the host Mac and your phone.
+| Capability | What it means |
+| --- | --- |
+| **Real session continuity** | Search cached local sessions, open one, and send every follow-up back to that session. |
+| **Live agent work** | Follow the response as it arrives and expand the work timeline when you want the details. |
+| **Run controls** | Choose the model, speed, and reasoning effort for each message. |
+| **Mobile-first PWA** | Add it to your Home Screen for a focused, app-like window. |
+| **Guarded external sends** | Sending outside the agent requires an exact target, exact message, `SEND`, and explicit confirmation. |
+| **Low-maintenance setup** | One command builds the app, installs a user LaunchAgent, and configures one Tailscale Serve route. |
 
 ## Quick start
+
+> [!NOTE]
+> You need macOS, Node.js 22.12+, a signed-in Aside CLI, and Tailscale connected on both your Mac and phone.
 
 ```bash
 git clone https://github.com/quino0627/tail-aside.git
@@ -46,35 +82,77 @@ npm install
 npm run setup
 ```
 
-The setup command:
+Setup detects your Aside account and current Tailscale login, builds the frontend, installs a per-user macOS LaunchAgent, and exposes port `4180` through Tailscale Serve. It then prints the private Tailnet URL to open on your phone.
 
-1. Detects the Aside CLI and its signed-in account.
-2. Detects your current Tailscale login and writes it as the only allowed user.
-3. Builds the frontend.
-4. Installs a per-user macOS LaunchAgent.
-5. Creates a Tailscale Serve HTTPS mapping on port `4180`.
+In mobile Safari, choose **Share → Add to Home Screen** for the app-like experience.
 
-It prints the private Tailnet URL to open on your phone. In mobile Safari, use **Share → Add to Home Screen** for an app-like window.
-
-Verify the installation at any time:
+Check the installation at any time:
 
 ```bash
 npm run doctor
 ```
 
-### Setup options
+## How it works
+
+```mermaid
+flowchart LR
+  Phone[Phone browser] -->|Private HTTPS| Serve[Tailscale Serve]
+  Serve -->|Identity headers| App[tail-aside on localhost]
+  App -->|Read + cache metadata| Sessions[(Aside sessions)]
+  App -->|aside exec --session| CLI[Aside CLI]
+  CLI --> Agent[Aside browser agent]
+  Agent -->|Live output| Phone
+```
+
+When you send a follow-up, `tail-aside` preserves the selected session ID and invokes the CLI with that session. The conversation shown on your phone and the one stored by Aside remain the same thread.
+
+### Stack
+
+| Layer | Technology |
+| --- | --- |
+| Mobile UI | React 19, Vite 8, installable PWA |
+| Local service | Node.js 22 with a small HTTP API |
+| Session index | Built-in `node:sqlite` metadata cache |
+| Private network | Tailscale Serve over HTTPS |
+| Agent runtime | Your existing Aside CLI and browser agent |
+
+## Security by default
+
+This app controls a browser agent on your computer, so it should be treated as a privileged remote—not a public website.
+
+- The server accepts only loopback listener addresses such as `127.0.0.1`.
+- Tailscale Serve terminates private HTTPS and forwards verified identity headers.
+- Setup allowlists the current Tailscale login unless you explicitly allow the whole Tailnet.
+- State-changing requests require JSON, same-origin browser context, and the `X-Tail-Aside` marker.
+- The content security policy blocks third-party scripts, framing, and remote connections.
+- Session transcripts and cache files remain on the host; the browser stores only non-secret UI preferences.
+
+> [!WARNING]
+> Do not use **Tailscale Funnel** for `tail-aside`. Funnel publishes a service to the public internet.
+
+For a shared Tailnet, review the official [Tailscale Serve documentation](https://tailscale.com/docs/features/tailscale-serve) and [grants documentation](https://tailscale.com/docs/features/access-control/grants). Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/quino0627/tail-aside/security/advisories/new).
+
+## Configuration
+
+<details>
+<summary><strong>Setup options</strong></summary>
 
 ```text
 --port <number>               Use another local and Tailnet HTTPS port
 --no-launchd                  Configure and build without installing a service
 --no-serve                    Do not change Tailscale Serve
---allow-any-tailnet-user      Allow every authenticated user in the tailnet
+--allow-any-tailnet-user      Allow every authenticated user in the Tailnet
 --force-serve                 Replace an existing mapping on this exact port
 ```
 
 The setup script refuses to replace an unrelated Serve mapping unless `--force-serve` is explicit. It never resets your other Tailscale Serve routes.
 
-## Manual configuration
+</details>
+
+<details>
+<summary><strong>Manual installation</strong></summary>
+
+The one-command service setup targets macOS. Manual startup works anywhere the Aside CLI runs.
 
 Copy [`config.example.json`](config.example.json) to `~/.config/tail-aside/config.json`, update the paths and login, then run:
 
@@ -90,7 +168,12 @@ In another terminal:
 tailscale serve --bg --https=4180 http://127.0.0.1:4180
 ```
 
-Environment variables override the JSON file:
+</details>
+
+<details>
+<summary><strong>Environment variables</strong></summary>
+
+Environment variables override the JSON configuration file.
 
 | Variable | Purpose |
 | --- | --- |
@@ -102,19 +185,9 @@ Environment variables override the JSON file:
 | `TAIL_ASIDE_SESSION_DIR` | Aside session directory |
 | `TAIL_ASIDE_STATE_DIR` | Private cache and state directory |
 | `TAIL_ASIDE_ALLOWED_LOGINS` | Comma-separated Tailscale login allowlist |
-| `TAIL_ASIDE_ALLOW_ANY_TAILNET_USER=1` | Allow any authenticated tailnet member |
+| `TAIL_ASIDE_ALLOW_ANY_TAILNET_USER=1` | Allow any authenticated Tailnet member |
 
-## Security model
-
-`tail-aside` intentionally listens only on `127.0.0.1`. Tailscale Serve terminates private HTTPS and forwards Tailscale identity headers; the API compares the forwarded login against its allowlist. Tailscale documents that Serve removes client-supplied copies of those identity headers before adding trusted values. Tailnet grants or ACLs provide an additional network-level boundary.
-
-- Do not use Tailscale Funnel for this app. Funnel makes a service public on the internet.
-- Keep `allowedLogins` narrow unless everyone in your tailnet should control the browser agent.
-- The frontend stores only non-secret UI preferences. Session transcripts and cache files remain on the host.
-- State-changing API calls require JSON, a same-origin browser context, and a `X-Tail-Aside` marker.
-- The content security policy blocks third-party scripts, framing, and remote connections.
-
-See the official [Tailscale Serve documentation](https://tailscale.com/docs/features/tailscale-serve) and [grants documentation](https://tailscale.com/docs/features/access-control/grants) when tightening access for a shared tailnet. Report vulnerabilities through [GitHub private vulnerability reporting](https://github.com/quino0627/tail-aside/security/advisories/new).
+</details>
 
 ## Development
 
@@ -124,16 +197,21 @@ npm test
 npm run check
 ```
 
-The Node server serves `dist/` in production. Tests cover account detection, Tailnet authorization, write-request guards, run validation, CLI argument construction, and a live local API smoke test.
+The production Node server serves `dist/`. Tests cover account detection, Tailnet authorization, write-request guards, run validation, CLI argument construction, and a live local API smoke test.
 
-## Project boundaries
+Focused issues and pull requests are welcome. Please run `npm run check` before opening a PR.
 
-- Aside CLI installation, authentication, browser capabilities, and model availability are managed by Aside.
-- Session formats are read from the local Aside data directory and may need updates when the CLI changes.
-- `tail-aside` is single-user and allows one active run at a time. It is not a multi-tenant hosted service.
-- Tailscale Serve configuration remains machine-local and is not committed to this repository.
+## Current scope
 
-## License and attribution
+`tail-aside` is deliberately small and personal:
+
+- It supports one user and one active agent run at a time.
+- Aside CLI installation, authentication, browser capabilities, and model availability remain managed by Aside.
+- Local session formats can change when the Aside CLI changes.
+- It is not a hosted service, multi-tenant console, or official Aside mobile app.
+- Tailscale Serve configuration remains machine-local and is never committed to this repository.
+
+## License
 
 MIT © 2026 MongWook Song. See [LICENSE](LICENSE) and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
