@@ -20,8 +20,8 @@ export function Composer({
 }) {
   const textareaRef = useRef(null);
   const canSend = Boolean(draft.trim()) && !loading && !activeRun && !continuationBlocked;
-  const modelName = model ? model.split('/').at(-1) : 'default';
-  const settingsLabel = `${effort} · ${modelName}`;
+  const modelName = model ? model.split('/').at(-1).replace(/^gpt/i, 'GPT') : 'Default';
+  const settingsLabel = `${modelName} · ${effort}`;
 
   useEffect(() => {
     const textarea = textareaRef.current;
@@ -74,7 +74,7 @@ export function Composer({
           <span className="mode-dot" /> {mode === 'send' ? 'Send' : 'Agent'}
         </button>
         <button type="button" className="tool-button settings-tool" onClick={onOpenSettings} aria-label={`Agent settings: ${settingsLabel}`}>
-          <span>{effort}</span><span className="settings-detail"> · {modelName}</span><Icon name="chevronDown" size={12} />
+          <span>{modelName}</span><span className="settings-detail"> · {effort}</span><Icon name="chevronDown" size={12} />
         </button>
         <span className="toolbar-spacer" />
         {draft.length > 7200 ? <span className="composer-count" aria-label={`${8000 - draft.length} characters remaining`}>{8000 - draft.length}</span> : null}

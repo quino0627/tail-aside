@@ -8,6 +8,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createGzip } from 'node:zlib';
 import { loadConfig } from './lib/config.mjs';
+import { parseModelSuggestions } from './lib/model-suggestions.mjs';
 import { sessionTitle } from './lib/session-display.mjs';
 import {
   SECURITY_HEADERS,
@@ -49,6 +50,7 @@ const transcriptCache = new Map();
 const asideCacheFallback = new Map();
 let healthCache = { fetchedAt: 0, value: null };
 let browserCache = { fetchedAt: 0, value: null };
+let modelSuggestionsCache = { fetchedAt: 0, value: [] };
 let stateTimer = null;
 let stateWrite = Promise.resolve();
 let cacheDb = null;
@@ -778,13 +780,28 @@ function execFileAsync(file, args, options = {}) {
   });
 }
 
+async function getModelSuggestions() {
+  const fetchedAt = Date.now();
+  if (fetchedAt - modelSuggestionsCache.fetchedAt < 6 * 60 * 60 * 1000) {
+    return modelSuggestionsCache.value;
+  }
+  const result = await execFileAsync(ASIDE_BIN, ['--help'], { timeout: 10_000, maxBuffer: 120_000 });
+  const suggestions = parseModelSuggestions(
+    stripAnsi(`${result.stdout}\n${result.stderr}`),
+    CONFIG.defaults.model,
+  );
+  modelSuggestionsCache = { fetchedAt, value: suggestions };
+  return suggestions;
+}
+
 async function getHealth() {
   const fetchedAt = Date.now();
   if (healthCache.value && fetchedAt - healthCache.fetchedAt < 15000) return healthCache.value;
 
-  const [versionResult, accountResult] = await Promise.all([
+  const [versionResult, accountResult, modelSuggestions] = await Promise.all([
     execFileAsync(ASIDE_BIN, ['--version']),
     execFileAsync(ASIDE_BIN, ['account', 'status', ACCOUNT]),
+    getModelSuggestions(),
   ]);
   const versionText = stripAnsi(`${versionResult.stdout}\n${versionResult.stderr}`);
   const accountText = stripAnsi(`${accountResult.stdout}\n${accountResult.stderr}`);
@@ -807,6 +824,10 @@ async function getHealth() {
       authorizedUsers: CONFIG.allowAnyTailnetUser ? null : CONFIG.allowedLogins.length,
     },
     defaults: { ...CONFIG.defaults },
+    models: {
+      suggestions: modelSuggestions,
+      source: 'aside-cli-help',
+    },
     checkedAt: now(),
   };
   healthCache = { fetchedAt, value };

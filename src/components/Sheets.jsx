@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Icon } from './Ui';
 
 function Sheet({ title, subtitle, children, onClose }) {
@@ -99,6 +99,81 @@ export function PermissionSheet({
 }
 
 const EFFORTS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultrabrowse'];
+const FALLBACK_MODELS = ['openai/gpt-5.4', 'openai-codex/gpt-5.5', 'anthropic/claude-opus-4-6'];
+
+function modelLabel(model) {
+  const name = model.split('/').at(-1) || model;
+  const label = /^gpt-/i.test(name) ? name.replace(/^gpt/i, 'GPT') : name
+    .split(/[-_]/)
+    .map((part) => (/^\d/.test(part) ? part : `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`))
+    .join(' ')
+    .replace(/Claude Opus (\d) (\d)$/i, 'Claude Opus $1.$2');
+  return model.startsWith('openai-codex/') ? `${label} Codex` : label;
+}
+
+function providerLabel(model) {
+  const provider = model.includes('/') ? model.split('/')[0] : '';
+  if (provider === 'openai-codex') return 'OpenAI Codex';
+  if (provider === 'openai') return 'OpenAI';
+  if (provider === 'anthropic') return 'Anthropic';
+  return provider || 'Aside';
+}
+
+function ModelPicker({ model, setModel, suggestions }) {
+  const [customOpen, setCustomOpen] = useState(false);
+  const options = useMemo(() => {
+    const ids = suggestions?.length ? suggestions : FALLBACK_MODELS;
+    return [...new Set(ids)].slice(0, 5);
+  }, [suggestions]);
+  const optionIds = useMemo(() => new Set(options), [options]);
+  const customSelected = Boolean(model && !optionIds.has(model));
+  const showCustom = customOpen || customSelected;
+
+  function choose(value) {
+    setModel(value);
+    setCustomOpen(false);
+  }
+
+  return (
+    <section className="settings-section">
+      <h3>Model</h3>
+      <div className="model-choice-list" role="radiogroup" aria-label="Model">
+        <button type="button" role="radio" aria-checked={!model} className={`model-choice ${!model ? 'is-selected' : ''}`} onClick={() => choose('')}>
+          <span className="model-mark">A</span>
+          <span className="model-choice-copy"><strong>Aside default</strong><small>Use the model configured in your Aside account.</small></span>
+          {!model ? <Icon name="check" size={17} /> : null}
+        </button>
+        {options.map((value) => (
+          <button type="button" role="radio" aria-checked={model === value} className={`model-choice ${model === value ? 'is-selected' : ''}`} key={value} onClick={() => choose(value)}>
+            <span className="model-mark">{value.startsWith('openai-codex/') ? 'C' : providerLabel(value).slice(0, 1)}</span>
+            <span className="model-choice-copy"><strong>{modelLabel(value)}</strong><small>{providerLabel(value)} · {value}</small></span>
+            {model === value ? <Icon name="check" size={17} /> : null}
+          </button>
+        ))}
+        <button type="button" role="radio" aria-checked={customSelected} className={`model-choice ${customSelected ? 'is-selected' : ''}`} onClick={() => setCustomOpen(true)}>
+          <span className="model-mark">+</span>
+          <span className="model-choice-copy"><strong>Custom model</strong><small>Enter another provider/model ID.</small></span>
+          {customSelected ? <Icon name="check" size={17} /> : <Icon name="chevronRight" size={16} />}
+        </button>
+      </div>
+      {showCustom ? (
+        <label className="model-custom-field">
+          <span>Model ID</span>
+          <input
+            className="settings-input"
+            value={customSelected ? model : ''}
+            onChange={(event) => setModel(event.target.value)}
+            placeholder="provider/model"
+            autoCapitalize="none"
+            autoCorrect="off"
+            spellCheck="false"
+          />
+        </label>
+      ) : null}
+      <p className="settings-help">Suggested models come from your installed Aside CLI. Availability still depends on your Aside account.</p>
+    </section>
+  );
+}
 
 export function SettingsSheet({
   health,
@@ -121,10 +196,7 @@ export function SettingsSheet({
 
   return (
     <Sheet title="Agent settings" subtitle="These values are passed directly to Aside CLI for each run." onClose={onClose}>
-      <section className="settings-section">
-        <h3>Model</h3>
-        <input className="settings-input" value={model} onChange={(event) => setModel(event.target.value)} placeholder="Aside default" autoCapitalize="none" autoCorrect="off" spellCheck="false" />
-      </section>
+      <ModelPicker model={model} setModel={setModel} suggestions={health?.models?.suggestions} />
       <section className="settings-section">
         <h3>Reasoning effort</h3>
         <div className="chip-grid">

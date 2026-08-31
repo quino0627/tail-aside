@@ -240,7 +240,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .tool-button.is-external { color: var(--external); background: #f6e9df; }
 .mode-dot { width: 7px; height: 7px; flex: none; border-radius: 999px; background: currentColor; }
 .settings-tool { max-width: 180px; overflow: hidden; }
-.settings-tool > span:first-child { flex: none; }
+.settings-tool > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .settings-detail { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .toolbar-spacer { min-width: 0; flex: 1; }
 .composer-count { flex: none; color: var(--faint-ink); font-variant-numeric: tabular-nums; font-size: 11px; }
@@ -413,6 +413,19 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
 .checkbox-row input { width: 17px; height: 17px; padding: 0; accent-color: var(--external); }
 .settings-section { display: flex; flex-direction: column; gap: 8px; }
 .settings-section h3 { margin: 0 3px; color: var(--muted-ink); font-size: 12px; font-weight: 700; letter-spacing: .055em; text-transform: uppercase; }
+.model-choice-list { overflow: hidden; border: 1px solid var(--line); border-radius: 17px; background: var(--surface); }
+.model-choice { display: flex; width: 100%; min-height: 64px; align-items: center; gap: 11px; padding: 10px 12px; border-bottom: 1px solid var(--line); text-align: left; }
+.model-choice:last-child { border-bottom: 0; }
+.model-choice:hover, .model-choice:active { background: var(--soft); }
+.model-choice.is-selected { color: var(--accent); background: var(--accent-soft); }
+.model-mark { display: grid; width: 34px; height: 34px; place-items: center; flex: none; border-radius: 11px; color: var(--muted-ink); background: var(--soft); font-size: 12px; font-weight: 750; }
+.model-choice.is-selected .model-mark { color: var(--accent); background: rgba(255, 255, 255, .68); }
+.model-choice-copy { display: flex; min-width: 0; flex: 1; flex-direction: column; gap: 3px; }
+.model-choice-copy strong { color: var(--ink); font-size: 14px; font-weight: 650; }
+.model-choice-copy small { overflow: hidden; color: var(--muted-ink); font-family: ui-monospace, "SFMono-Regular", Menlo, monospace; font-size: 10.5px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+.model-choice > .icon { flex: none; }
+.model-custom-field { display: flex; flex-direction: column; gap: 6px; padding: 3px; color: var(--muted-ink); font-size: 11px; font-weight: 650; }
+.settings-help { margin: 0 3px; color: var(--faint-ink); font-size: 10.5px; line-height: 1.45; }
 .chip-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
 .chip-grid button, .segmented-control button { min-height: 38px; border: 1px solid transparent; border-radius: 11px; color: var(--muted-ink); background: var(--soft); font-size: 12px; font-weight: 600; text-transform: capitalize; }
 .chip-grid button.is-selected, .segmented-control button.is-selected { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 25%, transparent); background: var(--accent-soft); }
@@ -476,7 +489,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, summary:focus
   .connection-pill { padding: 0 9px; }
   .connection-pill .icon { display: none; }
   .tool-button:not(.icon-only) { padding-right: 7px; padding-left: 7px; }
-  .settings-tool { max-width: none; }
+  .settings-tool { max-width: 100px; }
   .composer-toolbar { gap: 3px; }
   .composer-count { display: none; }
 }
