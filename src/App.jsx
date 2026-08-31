@@ -1,6 +1,6 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { cancelRun, createRun, getBrowserTabs, getHealth, getThread, getThreads } from './lib/api';
-import { Brand, Icon } from './components/Ui';
+import { Brand, Icon, Spinner } from './components/Ui';
 import { SessionList } from './components/Sessions';
 import { Composer } from './components/Composer';
 import { PermissionSheet, SettingsSheet } from './components/Sheets';
@@ -46,6 +46,7 @@ export default function App() {
   const [error, setError] = useState('');
   const [sheet, setSheet] = useState(null);
   const [showJumpToLatest, setShowJumpToLatest] = useState(false);
+  const [composerFocusRequest, setComposerFocusRequest] = useState(0);
   const metaSignatureRef = useRef('');
   const threadSignatureRef = useRef('');
   const preferencesInitializedRef = useRef(false);
@@ -53,6 +54,10 @@ export default function App() {
   const previousThreadRef = useRef(null);
   const draftKey = activeThreadId || NEW_DRAFT_KEY;
   const draft = drafts[draftKey] || '';
+
+  const focusComposer = useCallback(() => {
+    setComposerFocusRequest((value) => value + 1);
+  }, []);
 
   const updateDraft = useCallback((value) => {
     setDrafts((current) => {
@@ -318,6 +323,7 @@ export default function App() {
       continuationBlocked={continuationBlocked}
       error={error.startsWith('Could not connect') ? '' : error}
       home={!activeThreadId}
+      focusRequest={composerFocusRequest}
     />
   );
 
@@ -365,7 +371,7 @@ export default function App() {
 
   if (!activeThreadId) {
     return (
-      <div className="app-shell home-shell">
+      <div className={`app-shell home-shell ${threads.length ? 'has-sessions' : ''}`}>
         <header className="home-header">
           <Brand />
           <button type="button" className="connection-pill" onClick={() => setSheet('settings')}>
@@ -379,7 +385,7 @@ export default function App() {
           <section className="home-hero">
             <p className="eyebrow"><Icon name="lock" size={13} /> Private on your Tailnet</p>
             <h1>What should Aside do?</h1>
-            <p>Run the same browser agent from your phone, then continue the session later.</p>
+            <p>{threads.length ? 'Start something new or continue a session below.' : 'Run the same browser agent from your phone, then continue the session later.'}</p>
           </section>
           <SessionList
             threads={threads}
@@ -428,7 +434,9 @@ export default function App() {
           </button>
           <span className="thread-heading">
             <span className="thread-title">{activeThread?.title || 'Aside session'}</span>
-            <span className="thread-subtitle"><Icon name="lock" size={11} /> Private via Tailscale{activeThread?.canContinue ? ' · continuing' : ''}</span>
+            <span className={`thread-subtitle ${activeRun ? 'is-running' : ''}`}>
+              {activeRun ? <><Spinner label="Aside is working" /> Aside is working</> : <><Icon name="lock" size={11} /> Private via Tailscale{activeThread?.canContinue ? ' · continuing' : ''}</>}
+            </span>
           </span>
           <button type="button" className="icon-button thread-new-button" onClick={newConversation} aria-label="New session">
             <Icon name="plus" size={18} />
@@ -438,9 +446,12 @@ export default function App() {
           </button>
         </header>
         {connectionNotice}
-        <main className="thread-scroll" ref={threadScrollerRef} onScroll={updateScrollPosition} aria-live="polite">
+        <div className="sr-only" role="status" aria-live="polite">
+          {activeRun ? 'Aside is working on the latest request.' : ''}
+        </div>
+        <main className="thread-scroll" ref={threadScrollerRef} onScroll={updateScrollPosition}>
           <Suspense fallback={<div className="thread-empty">Loading conversation renderer…</div>}>
-            <ThreadView runs={threadRuns} />
+            <ThreadView runs={threadRuns} onFollowUp={continuationBlocked ? null : focusComposer} />
           </Suspense>
         </main>
         {showJumpToLatest ? (

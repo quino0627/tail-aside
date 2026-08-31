@@ -20,7 +20,10 @@ function groupLabel(value) {
 
 function groupThreads(threads) {
   const groups = [];
+  const running = threads.filter((thread) => thread.status === 'running');
+  if (running.length) groups.push({ label: 'Running', threads: running });
   for (const thread of threads) {
+    if (thread.status === 'running') continue;
     const label = groupLabel(thread.updatedAt);
     const current = groups.at(-1);
     if (current?.label === label) current.threads.push(thread);
@@ -109,7 +112,7 @@ export const SessionList = memo(function SessionList({
                     </span>
                   </span>
                   <span className="session-meta">
-                    {thread.status === 'running' ? <Spinner label="Session is running" /> : <span className={`session-state-dot ${thread.canContinue ? 'is-active' : ''}`} />}
+                    {thread.status === 'running' ? <Spinner label="Session is running" /> : null}
                     <time dateTime={thread.updatedAt} title={new Date(thread.updatedAt).toLocaleString()}>{formatRelative(thread.updatedAt)}</time>
                     <Icon name="chevronRight" size={15} />
                   </span>
